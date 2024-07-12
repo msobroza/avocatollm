@@ -1,0 +1,58 @@
+pipeline:
+  components:
+    llm:
+      module: llama_index.llms.huggingface
+      class: HuggingFaceLLM
+      params:
+        model_name: "HuggingFaceH4/zephyr-7b-beta"
+        tokenizer_name: "HuggingFaceH4/zephyr-7b-beta"
+        system_prompt: "You are a Q&A assistant. Your goal is to answer questions as accurately as possible based on the instructions and context provided. Only use the context provided and STRICTLY say you dont know if you dont know."
+        query_wrapper_prompt: "{query_str}"
+        context_window: 3900
+        max_new_tokens: 256
+        generate_kwargs:
+          temperature: 0.1
+        bnb_config:
+          module: transformers
+          class: BitsAndBytesConfig
+          params:
+            load_in_4bit: true
+            bnb_4bit_use_double_quant: true
+            bnb_4bit_quant_type: "nf4"
+            bnb_4bit_compute_dtype: "torch.bfloat16"
+
+    retriever:
+      module: llama_index.core
+      class: VectorStoreRetriever
+      params:
+        similarity_top_k: 3
+
+    reranker:
+      module: llama_index.postprocessor.cohere_rerank
+      class: CohereRerank
+      params: {}
+
+    summarizer:
+      module: llama_index.core.response_synthesizers
+      class: TreeSummarize
+      params: {}
+
+  dag:
+    - source: llm
+      destination: retriever
+
+    - source: retriever
+      destination: reranker
+      dest_key: nodes
+
+    - source: llm
+      destination: reranker
+      dest_key: query_str
+
+    - source: reranker
+      destination: summarizer
+      dest_key: nodes
+
+    - source: llm
+      destination: summarizer
+      dest_key: query_str
