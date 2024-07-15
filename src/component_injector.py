@@ -16,11 +16,33 @@ class PipelineComponentInjector:
         """
         components = {}
         for name, component in self.config.pipeline.components.items():
-            params = component.params
-            if self.args:
-                for param in params:
-                    arg_value = getattr(self.args, f'{name}_{param}', None)
-                    if arg_value is not None:
-                        params[param] = arg_value
+            params = self._update_params(component.params, name)
             components[name] = ComponentFactory.create_component(component.module, component.class_, params)
         return components
+
+    def _update_params(self, params: Dict[str, Any], component_name: str) -> Dict[str, Any]:
+        """
+        Update parameters based on command-line arguments.
+        """
+        for key, value in self.args.__dict__.items():
+            if key.startswith(f'{component_name}__'):
+                # Split the argument name into parts
+                parts = key.split('__')
+                # Remove the component name part
+                parts.pop(0)
+                # Recursively update the nested parameter
+                self._set_nested_param(params, parts, value)
+        return params
+
+    def _set_nested_param(self, params: Dict[str, Any], parts: list, value: Any):
+        """
+        Recursively set the nested parameter.
+        """
+        part = parts.pop(0)
+        if len(parts) == 0:
+            params[part] = value
+        else:
+            if part not in params:
+                params[part] = {}
+            self._set_nested_param(params[part], parts, value)
+
